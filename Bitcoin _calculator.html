@@ -70,6 +70,24 @@
             color: red;
             margin-top: 10px;
         }
+        #clearButton {
+            background-color: #dc3545;
+            margin-top: 10px;
+        }
+        #clearButton:hover {
+            background-color: #c82333;
+        }
+        .deleteBtn {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .deleteBtn:hover {
+            background-color: #c82333;
+        }
     </style>
 </head>
 <body>
@@ -77,53 +95,27 @@
         <h1>Bitcoin Profit/Loss Calculator</h1>
         <label for="buyPrice">Price Bought At (USD per BTC):</label>
         <input type="number" id="buyPrice" step="0.01" placeholder="e.g., 50000">
-        
         <label for="amount">Amount of Bitcoin (BTC):</label>
         <input type="number" id="amount" step="0.00000001" placeholder="e.g., 0.5">
-        
         <label for="buyDate">Purchase Date:</label>
         <input type="date" id="buyDate">
-        
-        <button onclick="addPurchase()">Add Purchase</button>
-        
+        <button id="addPurchaseBtn">Add Purchase</button>
         <label for="currentPrice">Current Bitcoin Price (USD per BTC):</label>
-        <input type="number" id="currentPrice" step="0.01" placeholder="Fetching live price..." readonly>
-        
-        <button onclick="calculate()">Calculate Total Profit/Loss</button>
-        
+        <input type="number" id="currentPrice" step="0.01" placeholder="e.g., 85781">
+        <button id="calculateBtn">Calculate Total Profit/Loss</button>
+        <button id="clearButton">Clear All Purchases</button>
         <div id="purchases">
             <h3>Your Purchases</h3>
             <table id="purchaseTable">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Buy Price (USD)</th>
-                        <th>Amount (BTC)</th>
-                        <th>Investment (USD)</th>
-                    </tr>
-                </thead>
+                <thead><tr><th>Date</th><th>Buy Price (USD)</th><th>Amount (BTC)</th><th>Investment (USD)</th><th>Action</th></tr></thead>
                 <tbody id="purchaseList"></tbody>
             </table>
         </div>
-        
         <div id="result"></div>
         <div id="error"></div>
     </div>
-
     <script>
         let purchases = JSON.parse(localStorage.getItem('bitcoinPurchases')) || [];
-
-        async function fetchLivePrice() {
-            try {
-                const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
-                const data = await response.json();
-                const price = data.bitcoin.usd;
-                document.getElementById('currentPrice').value = price.toFixed(2);
-                document.getElementById('error').innerHTML = '';
-            } catch (error) {
-                document.getElementById('error').innerHTML = 'Failed to fetch live Bitcoin price. Please check your internet connection.';
-            }
-        }
 
         function loadPurchases() {
             const purchaseList = document.getElementById('purchaseList');
@@ -131,12 +123,7 @@
             purchases.sort((a, b) => new Date(a.date) - new Date(b.date));
             purchases.forEach((purchase, index) => {
                 const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${purchase.date}</td>
-                    <td>$${parseFloat(purchase.buyPrice).toFixed(2)}</td>
-                    <td>${parseFloat(purchase.amount).toFixed(8)}</td>
-                    <td>$${(purchase.buyPrice * purchase.amount).toFixed(2)}</td>
-                `;
+                row.innerHTML = `<td>${purchase.date}</td><td>$${parseFloat(purchase.buyPrice).toFixed(2)}</td><td>${parseFloat(purchase.amount).toFixed(8)}</td><td>$${(purchase.buyPrice * purchase.amount).toFixed(2)}</td><td><button class="deleteBtn" onclick="deletePurchase(${index})">Delete</button></td>`;
                 purchaseList.appendChild(row);
             });
         }
@@ -146,12 +133,10 @@
             const amount = parseFloat(document.getElementById('amount').value);
             const buyDate = document.getElementById('buyDate').value;
             const errorDiv = document.getElementById('error');
-
             if (isNaN(buyPrice) || isNaN(amount) || !buyDate || buyPrice <= 0 || amount <= 0) {
                 errorDiv.innerHTML = 'Please enter valid positive numbers for price, amount, and a valid date.';
                 return;
             }
-
             purchases.push({ buyPrice, amount, date: buyDate });
             localStorage.setItem('bitcoinPurchases', JSON.stringify(purchases));
             loadPurchases();
@@ -161,25 +146,29 @@
             document.getElementById('buyDate').value = '';
         }
 
+        function deletePurchase(index) {
+            purchases.splice(index, 1);
+            localStorage.setItem('bitcoinPurchases', JSON.stringify(purchases));
+            loadPurchases();
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('error').innerHTML = 'Purchase deleted successfully!';
+        }
+
         function calculate() {
             const currentPrice = parseFloat(document.getElementById('currentPrice').value);
             const resultDiv = document.getElementById('result');
             const errorDiv = document.getElementById('error');
-
             if (isNaN(currentPrice) || currentPrice <= 0) {
-                errorDiv.innerHTML = 'Please ensure a valid current Bitcoin price is loaded.';
+                errorDiv.innerHTML = 'Please enter a valid positive number for the current Bitcoin price.';
                 return;
             }
-
             if (purchases.length === 0) {
                 errorDiv.innerHTML = 'No purchases added yet.';
                 return;
             }
-
             let totalInvestment = 0;
             let totalCurrentValue = 0;
             let totalAmount = 0;
-
             purchases.forEach(purchase => {
                 const investment = purchase.buyPrice * purchase.amount;
                 const currentValue = currentPrice * purchase.amount;
@@ -187,10 +176,8 @@
                 totalCurrentValue += currentValue;
                 totalAmount += purchase.amount;
             });
-
             const totalProfitLoss = totalCurrentValue - totalInvestment;
             const totalProfitLossPercentage = totalInvestment > 0 ? ((totalCurrentValue - totalInvestment) / totalInvestment * 100).toFixed(2) : 0;
-
             let resultText = `
                 <strong>Total Bitcoin Owned:</strong> ${totalAmount.toFixed(8)} BTC<br>
                 <strong>Total Investment:</strong> $${totalInvestment.toFixed(2)}<br>
@@ -203,9 +190,23 @@
             errorDiv.innerHTML = '';
         }
 
-        fetchLivePrice();
+        function clearPurchases() {
+            if (confirm('Are you sure you want to clear all purchases?')) {
+                purchases = [];
+                localStorage.setItem('bitcoinPurchases', JSON.stringify(purchases));
+                loadPurchases();
+                document.getElementById('result').innerHTML = '';
+                document.getElementById('error').innerHTML = 'All purchases cleared.';
+            }
+        }
+
+        // Attach event listeners
+        document.getElementById('addPurchaseBtn').addEventListener('click', addPurchase);
+        document.getElementById('calculateBtn').addEventListener('click', calculate);
+        document.getElementById('clearButton').addEventListener('click', clearPurchases);
+
+        // Load purchases on page load
         loadPurchases();
-        setInterval(fetchLivePrice, 60000);
     </script>
 </body>
 </html>
